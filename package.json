@@ -1,0 +1,19 @@
+{
+  "name": "candles",
+  "version": "1.0.0",
+  "description": "Simple SPA to visualize candles from sai-candles UDF backend",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:onikonychev/candles.git"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "npx --yes serve -l 5173 -s ."
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.5.3"
+  },
+  "private": true
+}

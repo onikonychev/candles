@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SAI Candles — TradingView Lightweight Charts Demo</title>
+  <style>
+    :root { color-scheme: dark light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: #0b0f14;
+      color: #e5e7eb;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-height: 100vh;
+    }
+    header {
+      position: sticky; top: 0; z-index: 10;
+      padding: 10px 14px;
+      border-bottom: 1px solid #1f232b;
+      background: linear-gradient(180deg, rgba(18,22,28,.95), rgba(11,15,20,.95));
+      backdrop-filter: blur(8px);
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      flex-wrap: wrap;
+      box-shadow: 0 2px 0 rgba(0,0,0,.2);
+    }
+    .brand {
+      display: flex; align-items: center; gap: 10px; padding-right: 8px; margin-right: 6px; border-right: 1px solid #1f232b;
+    }
+    .logo {
+      width: 20px; height: 20px; border-radius: 4px; background: linear-gradient(135deg, #60a5fa, #22d3ee); box-shadow: 0 0 0 2px rgba(255,255,255,.06) inset;
+    }
+    header h1 { font-size: 15px; margin: 0; color: #93c5fd; font-weight: 600; letter-spacing: .2px; }
+
+    label { font-size: 12px; opacity: 0.9; }
+    select, input, button {
+      background: #0f172a;
+      color: #e5e7eb;
+      border: 1px solid #293247;
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 13px;
+    }
+    button { cursor: pointer; }
+    .seg {
+      display: inline-flex; gap: 6px; background: #0f172a; padding: 4px; border: 1px solid #293247; border-radius: 10px;
+    }
+    .seg button { background: transparent; border: 0; padding: 6px 8px; border-radius: 6px; color: #cbd5e1; }
+    .seg button.active { background: #1e293b; color: #93c5fd; }
+
+    #chart { height: calc(100vh - 112px); }
+    #chart, #chart > div { width: 100% !important; }
+    .row { display: flex; gap: 10px; align-items: center; }
+    .spacer { flex: 1 1 auto; }
+    #status { font-size: 12px; opacity: .85; }
+    footer { padding: 10px 14px; border-top: 1px solid #1f232b; color: #9ca3af; background: #0b0f14; }
+    a { color: #93c5fd; text-decoration: none; }
+    .tv-badge { font-size: 12px; color: #9ca3af; border: 1px solid #293247; padding: 4px 8px; border-radius: 999px; background: #0f172a; white-space: nowrap; }
+    .tv-badge:hover { color: #cbd5e1; border-color: #3b475f; }
+  </style>
+  <script src="https://unpkg.com/lightweight-charts@4.2.2/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="logo" aria-hidden="true"></div>
+      <h1>SAI Candles</h1>
+    </div>
+
+    <div class="row">
+      <label for="symbol">Symbol</label>
+      <select id="symbol"></select>
+      <input id="customSymbol" type="text" placeholder="Custom symbol" style="display:none; width: 140px;" />
+    </div>
+
+    <div class="row">
+      <label for="resolution">Resolution</label>
+      <div id="resSeg" class="seg" role="tablist" aria-label="Resolution">
+        <!-- buttons injected by JS -->
+      </div>
+    </div>
+
+    <div class="row">
+      <label for="countback">Candles</label>
+      <input id="countback" type="number" value="500" min="10" max="5000" step="10" style="width:100px" />
+    </div>
+
+    <div class="row">
+      <label for="refresh">Auto</label>
+      <select id="refresh">
+        <option value="0">Off</option>
+        <option value="5">5s</option>
+        <option value="15" selected>15s</option>
+        <option value="30">30s</option>
+        <option value="60">60s</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <label for="viewSel">View</label>
+      <select id="viewSel">
+        <option value="lc" selected>Lightweight</option>
+        <option value="tv">TradingView Widget</option>
+      </select>
+    </div>
+
+    <a class="tv-badge" href="https://www.tradingview.com/lightweight-charts/" target="_blank" rel="noreferrer noopener" title="Official open-source charting library by TradingView (not the full TradingView Charting Library UI)">Powered by TradingView Lightweight Charts</a>
+
+    <div class="spacer"></div>
+    <div id="status">Initializing…</div>
+  </header>
+
+  <main>
+    <div id="chart"></div>
+    <div id="tvwrap" class="tradingview-widget-container" style="display:none;height:calc(100vh - 112px);width:100%">
+      <div id="tvwidget" class="tradingview-widget-container__widget" style="height:100%;width:100%"></div>
+      <div class="tradingview-widget-copyright" style="display:none"></div>
+    </div>
+  </main>
+
+  <footer>
+    Backend: <a href="https://sai-candles.testnet-2.nibiru.fi/" target="_blank" rel="noreferrer noopener">sai-candles.testnet-2.nibiru.fi</a>
+  </footer>
+
+  <script>
+    // When hosted on Vercel (or any non-localhost domain) we proxy the UDF via vercel.json rewrites.
+    // For local development, use the absolute backend URL to avoid needing a proxy.
+    const USE_PROXY = typeof window !== 'undefined' && window.location && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    const API_BASE = USE_PROXY ? '/candles/udf' : 'https://sai-candles.testnet-2.nibiru.fi/candles/udf';
+
+    function $(id) { return document.getElementById(id); }
+    const elSymbol = $('symbol');
+    const elCustom = $('customSymbol');
+    const elCountback = $('countback');
+    const elRefresh = $('refresh');
+    const elStatus = $('status');
+    const elResSeg = $('resSeg');
+    const elViewSel = $('viewSel');
+
+    // current view: 'lc' (Lightweight Charts) or 'tv' (TradingView widget)
+    let view = 'lc';
+
+    // Resolutions: label -> UDF value
+    const RES = [
+      { label: '1m', v: '1' },
+      { label: '5m', v: '5' },
+      { label: '15m', v: '15' },
+      { label: '1h', v: '60' },
+      { label: '4h', v: '240' },
+      { label: '1d', v: 'D' },
+    ];
+    let resolution = '60'; // default 1h
+
+    function buildResolutionControls() {
+      elResSeg.innerHTML = '';
+      RES.forEach(r => {
+        const b = document.createElement('button');
+        b.textContent = r.label;
+        b.type = 'button';
+        b.dataset.value = r.v;
+        if (r.v === resolution) b.classList.add('active');
+        b.addEventListener('click', () => {
+          resolution = r.v;
+          for (const c of elResSeg.querySelectorAll('button')) c.classList.remove('active');
+          b.classList.add('active');
+          scheduleLoad();
+        });
+        elResSeg.appendChild(b);
+      });
+    }
+
+    // Map our simple symbols to TradingView full tickers (default to BINANCE:SYMBOLUSDT)
+    function symbolToTV(sym) {
+      const map = {
+        'BTC': 'BINANCE:BTCUSDT',
+        'ETH': 'BINANCE:ETHUSDT',
+        'ATOM': 'BINANCE:ATOMUSDT',
+        'OSMO': 'BINANCE:OSMOUSDT',
+        'NIBI': 'GATEIO:NIBI_USDT',
+      };
+      const raw = (sym || '').trim();
+      const u = raw.toUpperCase();
+      // If user already provided a full TradingView ticker, pass through
+      if (raw.includes(':')) return raw;
+      if (map[u]) return map[u];
+      // generic guess
+      return `BINANCE:${u}USDT`;
+    }
+
+    // Render TradingView Advanced Chart widget
+    function renderTVWidget(sym, res) {
+      // stop any polling from LC
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = undefined; }
+      const wrap = document.getElementById('tvwrap');
+      const widget = document.getElementById('tvwidget');
+      // clear previous script/content
+      widget.innerHTML = '';
+      // interval mapping: use same values; TV accepts 'D' or minutes as strings
+      const interval = res;
+      const config = {
+        allow_symbol_change: true,
+        calendar: false,
+        details: false,
+        hide_side_toolbar: true,
+        hide_top_toolbar: false,
+        hide_legend: false,
+        hide_volume: false,
+        hotlist: false,
+        interval: interval,
+        locale: 'en',
+        save_image: true,
+        style: '1',
+        symbol: symbolToTV(sym),
+        theme: 'dark',
+        timezone: 'Etc/UTC',
+        backgroundColor: '#0b0f14',
+        gridColor: 'rgba(46, 46, 46, 0.06)',
+        watchlist: [],
+        withdateranges: false,
+        compareSymbols: [],
+        studies: [],
+        autosize: true,
+      };
+      const s = document.createElement('script');
+      s.type = 'text/javascript';
+      s.async = true;
+      s.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+      s.innerHTML = JSON.stringify(config, null, 2);
+      widget.appendChild(s);
+      elStatus.textContent = `TradingView widget: ${config.symbol} @ ${humanRes(res)}`;
+      // show TV, hide LC
+      document.getElementById('chart').style.display = 'none';
+      wrap.style.display = 'block';
+    }
+
+    let chart, candleSeries, lastTime = undefined, pollTimer = undefined;
+
+    function createChart() {
+      const container = $('chart');
+      if (chart) { container.innerHTML = ''; }
+      chart = LightweightCharts.createChart(container, {
+        layout: { background: { color: '#0b0f14' }, textColor: '#d1d5db' },
+        grid: { vertLines: { color: '#152131' }, horzLines: { color: '#152131' } },
+        rightPriceScale: { borderColor: '#293247' },
+        timeScale: { borderColor: '#293247', timeVisible: true, secondsVisible: false },
+        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+        autoSize: true,
+      });
+      candleSeries = chart.addCandlestickSeries({
+        upColor: '#16a34a', borderUpColor: '#16a34a', wickUpColor: '#16a34a',
+        downColor: '#dc2626', borderDownColor: '#dc2626', wickDownColor: '#dc2626',
+      });
+      new ResizeObserver(() => chart.timeScale().fitContent()).observe(container);
+    }
+
+    function getSelectedSymbol() {
+      const v = elSymbol.value;
+      if (v === 'CUSTOM') return elCustom.value.trim() || 'BTC';
+      return v;
+    }
+
+    elSymbol.addEventListener('change', () => {
+      if (elSymbol.value === 'CUSTOM') {
+        elCustom.style.display = '';
+        elCustom.focus();
+      } else {
+        elCustom.style.display = 'none';
+      }
+      scheduleLoad();
+    });
+    elCustom.addEventListener('change', scheduleLoad);
+    elCustom.addEventListener('keyup', (e) => { if (e.key === 'Enter') scheduleLoad(); });
+    elCountback.addEventListener('change', scheduleLoad);
+    elRefresh.addEventListener('change', startAutoRefresh);
+    elViewSel.addEventListener('change', () => {
+      view = elViewSel.value;
+      if (view === 'tv') {
+        // show TV widget for current symbol/resolution
+        const sym = getSelectedSymbol();
+        renderTVWidget(sym, resolution);
+      } else {
+        // back to Lightweight Charts
+        document.getElementById('tvwrap').style.display = 'none';
+        document.getElementById('chart').style.display = 'block';
+        createChart();
+        scheduleLoad();
+      }
+    });
+
+    async function fetchHistory({ symbol, resolution, countback }) {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const resSec = resolution === 'D' ? 86400 : parseInt(resolution, 10) * 60;
+      const to = nowSec;
+      const from = to - resSec * countback;
+      const u = new URL(API_BASE + '/history');
+      u.searchParams.set('symbol', symbol);
+      u.searchParams.set('resolution', resolution);
+      u.searchParams.set('from', String(from));
+      u.searchParams.set('to', String(to));
+      u.searchParams.set('countback', String(countback));
+      const res = await fetch(u.toString(), { headers: { 'accept': 'application/json' } });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }
+
+    async function fetchRange({ symbol, resolution, from, to }) {
+      const u = new URL(API_BASE + '/history');
+      u.searchParams.set('symbol', symbol);
+      u.searchParams.set('resolution', resolution);
+      u.searchParams.set('from', String(from));
+      u.searchParams.set('to', String(to));
+      const res = await fetch(u.toString(), { headers: { 'accept': 'application/json' } });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }
+
+    function udfToCandleSeries(udf) {
+      if (udf.s !== 'ok') return [];
+      const out = [];
+      for (let i = 0; i < udf.t.length; i++) {
+        out.push({ time: udf.t[i], open: +udf.o[i], high: +udf.h[i], low: +udf.l[i], close: +udf.c[i] });
+      }
+      return out;
+    }
+
+    const humanRes = (v) => ({ '1':'1m','5':'5m','15':'15m','60':'1h','240':'4h','D':'1d' }[v] || v);
+
+    async function load() {
+      const symbol = getSelectedSymbol();
+      const countback = Math.max(10, Math.min(5000, parseInt(elCountback.value || '500', 10)));
+      elStatus.textContent = `Loading ${symbol} @ ${humanRes(resolution)}…`;
+      try {
+        const udf = await fetchHistory({ symbol, resolution, countback });
+        const candles = udfToCandleSeries(udf);
+        if (!candles.length) {
+          candleSeries.setData([]);
+          lastTime = undefined;
+          elStatus.textContent = `No data for ${symbol} @ ${humanRes(resolution)}`;
+          return;
+        }
+        candleSeries.setData(candles);
+        lastTime = candles[candles.length - 1].time;
+        chart.timeScale().fitContent();
+        elStatus.textContent = `Loaded ${candles.length} bars for ${symbol} @ ${humanRes(resolution)}`;
+        startAutoRefresh();
+      } catch (e) {
+        console.error(e);
+        elStatus.textContent = 'Error: ' + (e && e.message ? e.message : String(e));
+      }
+    }
+
+    async function refreshLatest() {
+      if (lastTime == null) return;
+      const symbol = getSelectedSymbol();
+      const nowSec = Math.floor(Date.now() / 1000);
+      const resSec = resolution === 'D' ? 86400 : parseInt(resolution, 10) * 60;
+      const from = Math.max(0, lastTime - resSec * 2);
+      try {
+        const udf = await fetchRange({ symbol, resolution, from, to: nowSec });
+        const bars = udfToCandleSeries(udf);
+        if (!bars.length) return;
+        for (const bar of bars) {
+          if (lastTime == null || bar.time >= lastTime) {
+            candleSeries.update(bar);
+            lastTime = bar.time;
+          }
+        }
+        elStatus.textContent = `Live: ${symbol} @ ${humanRes(resolution)} — last ${new Date(lastTime * 1000).toLocaleString()}`;
+      } catch (e) {
+        // be silent on intermittent errors
+        console.debug('refresh error', e);
+      }
+    }
+
+    function startAutoRefresh() {
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = undefined; }
+      const iv = parseInt(elRefresh.value || '0', 10);
+      if (!iv) return;
+      pollTimer = setInterval(refreshLatest, iv * 1000);
+    }
+
+    // Debounced auto-load on controls change
+    let loadTimer;
+    function scheduleLoad() {
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = undefined; }
+      clearTimeout(loadTimer);
+      loadTimer = setTimeout(() => {
+        if (view === 'tv') {
+          const sym = getSelectedSymbol();
+          renderTVWidget(sym, resolution);
+        } else {
+          // ensure LC containers are visible/hidden appropriately
+          document.getElementById('tvwrap').style.display = 'none';
+          document.getElementById('chart').style.display = 'block';
+          load();
+        }
+      }, 200);
+    }
+
+    // Populate symbols from backend /search (fallback to a default list)
+    async function populateSymbols() {
+      const defaults = ['BTC','ETH','ATOM','OSMO','NIBI'];
+      try {
+        const u = new URL(API_BASE + '/search');
+        u.searchParams.set('query', '');
+        u.searchParams.set('limit', '1000');
+        const res = await fetch(u.toString(), { headers: { 'accept': 'application/json' } });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const arr = await res.json(); // expected: [{symbol, full_name, ...}, ...]
+        const syms = Array.isArray(arr) ? Array.from(new Set(arr.map(x => x.symbol || x.ticker || x.full_name))).filter(Boolean) : [];
+        const list = syms.length ? syms : defaults;
+        fillSymbolSelect(list);
+      } catch (e) {
+        console.warn('Symbol discovery failed, using defaults', e);
+        fillSymbolSelect(defaults);
+      }
+    }
+
+    function fillSymbolSelect(list) {
+      elSymbol.innerHTML = '';
+      for (const s of list) {
+        const opt = document.createElement('option');
+        opt.value = s; opt.textContent = s; elSymbol.appendChild(opt);
+      }
+      const cust = document.createElement('option');
+      cust.value = 'CUSTOM'; cust.textContent = 'Custom…'; elSymbol.appendChild(cust);
+      elSymbol.value = list.includes('BTC') ? 'BTC' : list[0];
+    }
+
+    // Initialize
+    createChart();
+    buildResolutionControls();
+    populateSymbols().then(() => load());
+  </script>
+</body>
+</html>
