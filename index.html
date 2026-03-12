@@ -296,7 +296,7 @@
       const resSec = resolution === 'D' ? 86400 : parseInt(resolution, 10) * 60;
       const to = nowSec;
       const from = to - resSec * countback;
-      const u = new URL(API_BASE + '/history');
+      const u = new URL(API_BASE + '/history', window.location.origin);
       u.searchParams.set('symbol', symbol);
       u.searchParams.set('resolution', resolution);
       u.searchParams.set('from', String(from));
@@ -308,7 +308,7 @@
     }
 
     async function fetchRange({ symbol, resolution, from, to }) {
-      const u = new URL(API_BASE + '/history');
+      const u = new URL(API_BASE + '/history', window.location.origin);
       u.searchParams.set('symbol', symbol);
       u.searchParams.set('resolution', resolution);
       u.searchParams.set('from', String(from));
@@ -405,7 +405,7 @@
     async function populateSymbols() {
       const defaults = ['BTC','ETH','ATOM','OSMO','NIBI'];
       try {
-        const u = new URL(API_BASE + '/search');
+        const u = new URL(API_BASE + '/search', window.location.origin);
         u.searchParams.set('query', '');
         u.searchParams.set('limit', '1000');
         const res = await fetch(u.toString(), { headers: { 'accept': 'application/json' } });
