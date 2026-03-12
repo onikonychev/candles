@@ -1,4 +1,5 @@
 {
+  "outputDirectory": ".",
   "rewrites": [
     { "source": "/candles/udf/:path*", "destination": "https://sai-candles.testnet-2.nibiru.fi/candles/udf/:path*" }
   ],
