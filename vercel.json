@@ -1,7 +1,7 @@
 {
   "outputDirectory": ".",
   "rewrites": [
-    { "source": "/candles/udf/(.*)", "destination": "https://sai-candles.nibiru.fi/candles/udf/$1" }
+    { "source": "/candles/udf/(.*)", "destination": "https://sai-candles.testnet-2.nibiru.fi/candles/udf/$1" }
   ],
   "headers": [
     {
